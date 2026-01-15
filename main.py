@@ -1,6 +1,6 @@
-from dbm import sqlite3
-
+import sqlite3
 from fastapi import FastAPI
+from typing import Any
 import requests
 app = FastAPI()
 
@@ -58,3 +58,75 @@ def get_single_movie(movie_id: int):
     if movie is None:
         return {"message": "Movie not found"}
     return {'id': movie[0], 'title': movie[1], 'year': movie[2], 'actors': movie[3]}
+
+
+@app.post("/movies")
+def add_movie(params: dict[str, Any]):
+    title = params.get("title")
+    year = params.get("year")
+    actors = params.get("actors")
+
+
+    with sqlite3.connect("movies.db") as db:
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO movies (title, year, actors) VALUES (?, ?, ?)",
+            (title, year, actors)
+            )
+        db.commit()
+        new_id = cursor.lastrowid
+
+    return {"message": f"Movie added successfully"}
+
+
+@app.put("/movies/{movie_id}")
+def update_movie(movie_id: int, params: dict[str, Any]):
+    title = params.get("title")
+    year = params.get("year")
+    actors = params.get("actors")
+
+    if not title or not year:
+        return {"error": "Missing title or year"}
+
+    try:
+        year = int(year)
+    except ValueError:
+        return {"error": "Year must be an integer"}
+
+    with sqlite3.connect("movies.db") as db:
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            UPDATE movies
+            SET title = ?, year = ?, actors = ?
+            WHERE id = ?
+            """,
+            (title, year, actors, movie_id)
+        )
+        db.commit()
+
+        if cursor.rowcount == 0:
+            return {"message": "Movie not found"}
+
+    return {"message": f"Movie with id {movie_id} updated"}
+
+@app.delete("/movies/{movie_id}")
+def delete_movie(movie_id: int):
+    with sqlite3.connect("movies.db") as db:
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
+        db.commit()
+
+        if cursor.rowcount == 0:
+            return {"message": "Movie not found"}
+
+    return {"message": f"Movie with id {movie_id} deleted"}
+
+@app.delete("/movies")
+def delete_all_movies():
+    with sqlite3.connect("movies.db") as db:
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM movies")
+        db.commit()
+
+    return {"message": "All movies deleted"}
